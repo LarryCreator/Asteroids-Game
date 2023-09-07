@@ -294,7 +294,7 @@ let player = {
             if (this.keysBeingPressed.includes("a")) {
                 this.rotatedAngle -= 0.030;
             }
-            if (this.keysBeingPressed.includes("ç") && this.coolDownAllows()) {
+            if (this.keysBeingPressed.includes("l") && this.coolDownAllows()) {
                 this.resetCoolDown();
                 this.prepareBullet();
             }
