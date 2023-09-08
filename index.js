@@ -124,23 +124,23 @@ let asteroidGenerator = {
     generateOneCustom: function(customSize, customVelocity, customPosition) {
         let newAsteroid = new Asteroid(customSize, customPosition, this.genSpeed());
         newAsteroid.velocity = customVelocity;
-        newAsteroid.type = "debris"; //line added for debugging purposes
+        newAsteroid.type = "debris"; //
         this.asteroidList.push(newAsteroid);
     },    
     generateDebris: function(quantity, parentAsteroid) {
         for (let i = 0; i < quantity; i++) {
             /*gets moving angle of parent asteroid, convert it to degree, generate a new angle with little offset
             based on the parent's angle in degrees, convert it to radians, and get the angle unity vector.
-            Generate a random size and create a custom asteroid smaller, with a new angle starting at the same position
+            Generate a random size and create a smaller custom asteroid, with a new angle starting at the same position
             of it's parent.*/
             const parentAsteroidMovingAngle = Math.atan2(parentAsteroid.velocity.y, parentAsteroid.velocity.x);
             const parentAsteroidMovingAngleDegrees = (parentAsteroidMovingAngle * 180) / Math.PI;
             const debrisAngle = getRandomInt(parentAsteroidMovingAngleDegrees - 20, parentAsteroidMovingAngleDegrees + 20);
             const debrisAngleRadians = debrisAngle * (Math.PI / 180);
             const debrisVelocity = {x: Math.cos(debrisAngleRadians), y: Math.sin(debrisAngleRadians)};
-            
-            const debrisSize = getRandomInt(7, 25);
-            this.generateOneCustom(debrisSize, debrisVelocity, parentAsteroid.position);
+            const size = getRandomInt(parentAsteroid.size.w / 3, parentAsteroid.size.w / 2);
+            const debrisSize = {w: size, h: size};
+            this.generateOneCustom(debrisSize, debrisVelocity, {x: parentAsteroid.position.x + 5, y: parentAsteroid.position.y});
         };
     },
     handleAsteroidCollisions: function(bulletsList, playerPosition){
@@ -148,6 +148,7 @@ let asteroidGenerator = {
         for (let i = this.asteroidList.length - 1; i >= 0; i--) {
             if (this.asteroidList[i].isCollided(playerPosition)) {
                 // Remove the asteroid and break out of the loop.
+                this.generateDebris(2, this.asteroidList[i]);
                 this.asteroidList.splice(i, 1);
                 break;
             }
@@ -159,8 +160,6 @@ let asteroidGenerator = {
                         bulletsList.splice(x, 1);
                         //generate debris
                         this.generateDebris(3, this.asteroidList[i]);
-                        //console.log("Parent position in the moment it was killed:");
-                        //console.log(this.asteroidList[i].position.y);
                         //remove asteroid
                         this.asteroidList.splice(i, 1);
                         break;
@@ -178,7 +177,7 @@ let bullet = {
     color: "green",
     rotatedAngle: 0,
     facingDirection: {x: 0, y: 0},
-    speed: 4,
+    speed: 5,
     generate: function(position, angle, facingDirection){
         this.position = position;
         this.rotatedAngle = angle;
@@ -294,7 +293,7 @@ let player = {
             if (this.keysBeingPressed.includes("a")) {
                 this.rotatedAngle -= 0.030;
             }
-            if (this.keysBeingPressed.includes("l") && this.coolDownAllows()) {
+            if (this.keysBeingPressed.includes("ç") && this.coolDownAllows()) {
                 this.resetCoolDown();
                 this.prepareBullet();
             }
@@ -344,11 +343,12 @@ function updateAsteroids() {
     }
 }
 
+
 function checkGenerateAsteroids() {
     /*this function generates two new asteroids every
     time there are less than 3 asteroids on the screen*/
-    if (asteroidGenerator.asteroidList.length < 3) {
-        asteroidGenerator.generate(2);
+    if (asteroidGenerator.asteroidList.length <= 3) {
+        asteroidGenerator.generate(4);
     }
 }
 
