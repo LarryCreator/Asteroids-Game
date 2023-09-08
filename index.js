@@ -7,9 +7,12 @@ const canvasMiddle = { x: canvas.width / 2, y: canvas.height / 2};
 const red = "#FF0000";
 const yellow = "#964B00"
 const green = "#008000";
-const image = new Image();
-image.src = "./ship.png";
 const backgroundColor = "white";
+const idleImage = new Image();
+idleImage.src = "./ship.png";
+const thrustImgs = [new Image(), new Image()];
+thrustImgs[0].src = "./ship_thrust_anim/2.png";
+thrustImgs[1].src = "./ship_thrust_anim/3.png";
 
 
 function clear() {
@@ -42,6 +45,31 @@ function keepWithinScreen(object) {
     }
 }
 
+function drawPlayerLife(player) {
+
+    let width = player.lifePoints > 0 ? 2 * player.lifePoints : 0;
+    let height = 14;
+    let color = "";
+    if (player.lifePoints > 65) {
+        color = "green";
+    } else if (player.lifePoints >= 30) {
+        color = "orange";
+    } else {
+        color = "red";
+    }
+    ctx.fillStyle = color;
+    ctx.fillRect(20, 20, width, height);
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(20, 20, 200, 14);
+    
+}
+
+function drawPlayerScore(player) {
+    ctx.font = "bold 20px serif";
+    ctx.fillStyle = "black";
+    ctx.fillText(`Score: ${player.score.toFixed(0)}`, 20, 60);
+}
+
 function Asteroid(size, position, speed) {
     this.size = size;
     this.position = position;
@@ -49,6 +77,7 @@ function Asteroid(size, position, speed) {
     this.velocity = {x: 0, y: 0};
     this.rotatedAngle = 0;
     this.color = "gray";
+    this.damage = 2;
 }
     Asteroid.prototype.move = function() {
         this.position.x += this.velocity.x * this.speed;
@@ -96,6 +125,12 @@ function Asteroid(size, position, speed) {
         }
         
     }
+    Asteroid.prototype.inflictDamage = function(object) {
+        object.lifePoints -= this.damage * (this.size.w / 8);
+    }
+    Asteroid.prototype.givePlayerPoints = function(player) {
+        player.score += 5 * (this.size.w / 3); 
+    };
 
 let asteroidGenerator = {
     asteroidList: [],
@@ -155,6 +190,8 @@ let asteroidGenerator = {
             if (this.asteroidList[i].isCollided(playerPosition)) {
                 // Remove the asteroid and break out of the loop.
                 this.asteroidList[i].applyForce(player);
+                this.asteroidList[i].inflictDamage(player);
+                this.asteroidList[i].givePlayerPoints(player);
                 player.applyForce(this.asteroidList[i]);
                 this.generateDebris(2, this.asteroidList[i]);
                 this.asteroidList.splice(i, 1);
@@ -168,6 +205,7 @@ let asteroidGenerator = {
                         bulletsList.splice(x, 1);
                         //generate debris
                         this.generateDebris(3, this.asteroidList[i]);
+                        this.asteroidList[i].givePlayerPoints(player);
                         //remove asteroid
                         this.asteroidList.splice(i, 1);
                         break;
@@ -216,8 +254,33 @@ let bullet = {
 
 }
 
+let animator = {
+    thrustImg: 0,
+    frameCounter: 0,
+    frameDelay: 8, // Adjust this value to control the animation speed
+
+    thrustingAnimation: function(player) {
+        if (player.accelerating) {
+            player.image = thrustImgs[this.thrustImg];
+            this.frameCounter++;
+            if (this.frameCounter >= this.frameDelay) {
+                this.frameCounter = 0;
+                player.image = thrustImgs[this.thrustImg];
+                this.thrustImg += 1;
+                if (this.thrustImg > 1) {
+                    this.thrustImg = 0;
+                }
+            }
+        } else {
+            player.image = idleImage;
+            this.frameCounter = 0; // Reset the frame counter when not thrusting
+        }
+    },
+};
+
+
 let player = {
-    image: image,
+    image: idleImage,
     keysBeingPressed: [],
     rotatedAngle: 0,
     position: {x: 400 - 25 / 2, y:400 - 25/2},
@@ -228,6 +291,9 @@ let player = {
     friction: 0.005,
     bullets: [],
     cooldown: 0,
+    lifePoints: 100,
+    score: 0,
+    accelerating: false,
     setFacingDirectionAndAcceleration: function(){
         this.facingDirection = {x: Math.cos(this.rotatedAngle), y: Math.sin(this.rotatedAngle)};
         this.acceleration = {x: this.facingDirection.x * this.speed, y: this.facingDirection.y * this.speed};
@@ -238,6 +304,7 @@ let player = {
     accelerate: function(){
         this.velocity.x += this.acceleration.x;
         this.velocity.y += this.acceleration.y;
+        
     },
     applyFriction: function(){
         if (!this.keysBeingPressed.includes("w")) {
@@ -367,12 +434,13 @@ asteroidGenerator.generate(3);
 function gameLoop() {
     requestAnimationFrame(gameLoop);
     clear();
+    player.appear();
+    animator.thrustingAnimation(player);
     if (asteroidGenerator.asteroidList.length > 0) {
         updateAsteroids();
         asteroidGenerator.handleAsteroidCollisions(player.bullets, player.position);
     } 
     checkGenerateAsteroids();
-    player.appear();
     if (player.bullets.length > 0) {
         player.shoot();
         for (let i = player.bullets.length - 1; i >= 0; i--) {
@@ -381,23 +449,33 @@ function gameLoop() {
             };
         }
     }
+    drawPlayerLife(player);
+    drawPlayerScore(player);
     keepWithinScreen(player);
 }
 
 window.addEventListener("keydown", function (event) {
     let keyBeingPressed = event.key;
+    if (keyBeingPressed == "w") {
+        player.accelerating = true;
+    }
     if (!player.keysBeingPressed.includes(keyBeingPressed)) {
         player.keysBeingPressed.push(keyBeingPressed)
     }
 });
 window.addEventListener("keyup", function(event){
     let keyBeingReleased = event.key;
+    if (keyBeingReleased == "w") {
+        player.accelerating = false;
+    }
     player.keysBeingPressed = player.keysBeingPressed.filter((item)=>item != keyBeingReleased);
 })
 
-image.onload = ()=>{
+
+idleImage.onload = () => {
     gameLoop();
-}
+};
+
 
 
 
