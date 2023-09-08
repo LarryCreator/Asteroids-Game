@@ -90,6 +90,12 @@ function Asteroid(size, position, speed) {
         }
         return false;
     };
+    Asteroid.prototype.applyForce = function(object) {
+        if (this.size.h > 15) {
+            object.velocity = {x: object.velocity.x + this.velocity.x * this.speed, y: object.velocity.y + this.velocity.y * this.speed};
+        }
+        
+    }
 
 let asteroidGenerator = {
     asteroidList: [],
@@ -148,6 +154,8 @@ let asteroidGenerator = {
         for (let i = this.asteroidList.length - 1; i >= 0; i--) {
             if (this.asteroidList[i].isCollided(playerPosition)) {
                 // Remove the asteroid and break out of the loop.
+                this.asteroidList[i].applyForce(player);
+                player.applyForce(this.asteroidList[i]);
                 this.generateDebris(2, this.asteroidList[i]);
                 this.asteroidList.splice(i, 1);
                 break;
@@ -223,6 +231,9 @@ let player = {
     setFacingDirectionAndAcceleration: function(){
         this.facingDirection = {x: Math.cos(this.rotatedAngle), y: Math.sin(this.rotatedAngle)};
         this.acceleration = {x: this.facingDirection.x * this.speed, y: this.facingDirection.y * this.speed};
+    },
+    applyForce: function(object) {
+        object.velocity = {x: object.velocity.x + this.velocity.x, y: object.velocity.y + this.velocity.y};
     },
     accelerate: function(){
         this.velocity.x += this.acceleration.x;
@@ -353,7 +364,6 @@ function checkGenerateAsteroids() {
 }
 
 asteroidGenerator.generate(3);
-
 function gameLoop() {
     requestAnimationFrame(gameLoop);
     clear();
