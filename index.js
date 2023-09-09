@@ -364,7 +364,7 @@ let player = {
     friction: 0.005,
     bullets: [],
     cooldown: 0,
-    lifePoints: 1,
+    lifePoints: 100,
     score: 0,
     status: "idle",
     setFacingDirectionAndAcceleration: function(){
