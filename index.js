@@ -1,4 +1,5 @@
-
+//atualmente com bug de qdo o player morre e explode, asteroids ainda explodem qdo batem na posição q o player tava antes de ir de berço
+//crie um sistema de status melhor, e depois isso crie texto para avisar q o player explodiu, e opção pra jogar novamente
 const canvas = document.getElementById("canvas");
 canvas.width = 800;
 canvas.height = 800;
@@ -29,6 +30,10 @@ function getRandomInt(min, max) {
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
+
+  function convertToRadians(angle) {
+    return angle * (Math.PI / 180);
+};
 
 function keepWithinScreen(object) {
     if (object.position.x > canvas.width + object.size.w / 3) {
@@ -151,7 +156,7 @@ let asteroidGenerator = {
         const playerAngle = Math.atan2(playerDirection.y, playerDirection.x);
         const playerAngleDegrees = (playerAngle * 180) / Math.PI;
         const generatedAngle = getRandomInt(playerAngleDegrees - 30, playerAngleDegrees + 30);
-        const generatedAngleRadians = generatedAngle * (Math.PI / 180);
+        const generatedAngleRadians = convertToRadians(generatedAngle);
         const unitVector = {x: Math.cos(generatedAngleRadians), y: Math.sin(generatedAngleRadians)};
         return unitVector;
     },
@@ -177,7 +182,7 @@ let asteroidGenerator = {
             const parentAsteroidMovingAngle = Math.atan2(parentAsteroid.velocity.y, parentAsteroid.velocity.x);
             const parentAsteroidMovingAngleDegrees = (parentAsteroidMovingAngle * 180) / Math.PI;
             const debrisAngle = getRandomInt(parentAsteroidMovingAngleDegrees - 20, parentAsteroidMovingAngleDegrees + 20);
-            const debrisAngleRadians = debrisAngle * (Math.PI / 180);
+            const debrisAngleRadians = convertToRadians(debrisAngle);
             const debrisVelocity = {x: Math.cos(debrisAngleRadians), y: Math.sin(debrisAngleRadians)};
             const size = getRandomInt(parentAsteroid.size.w / 3, parentAsteroid.size.w / 2);
             const debrisSize = {w: size, h: size};
@@ -260,7 +265,7 @@ let animator = {
     frameDelay: 8, // Adjust this value to control the animation speed
 
     thrustingAnimation: function(player) {
-        if (player.accelerating) {
+        if (player.status == "accelerating") {
             player.image = thrustImgs[this.thrustImg];
             this.frameCounter++;
             if (this.frameCounter >= this.frameDelay) {
@@ -278,6 +283,74 @@ let animator = {
     },
 };
 
+function Particle(size, position, velocity, speed, angle, color) {
+    //this object is only used inside the particleEffects object
+    this.size = size;
+    this.initialPosition = {...position};
+    this.position = position;
+    this.velocity = velocity;
+    this.rotatedAngle = angle;
+    this.speed = speed;
+    this.color = color;
+}
+    Particle.prototype.move = function() {
+        this.position.x += this.velocity.x * this.speed;
+        this.position.y += this.velocity.y * this.speed;
+    };
+    Particle.prototype.shouldDisappear = function() {
+        const distanceTraveledVector = {x: this.initialPosition.x - this.position.x, y: this.initialPosition.y - this.position.y};
+        const magnitude = Math.sqrt(distanceTraveledVector.x ** 2 + distanceTraveledVector.y ** 2);
+        return magnitude > 400;
+    };
+
+let particleEffects = {
+    particlesList: [],
+    particlesColors: ["darkorange", "red", "yellow"],
+    updateParticles: function() {
+        if (this.particlesList.length > 0) {
+            for (let i = this.particlesList.length - 1; i >= 0; i--) {
+                this.drawParticle(this.particlesList[i]);
+                this.particlesList[i].move();
+                this.deleteParticles(this.particlesList[i], i);
+            }
+        }
+    },
+    drawParticle: function(particle) {
+        ctx.save();
+        ctx.translate(particle.position.x, particle.position.y);
+        ctx.rotate(particle.rotatedAngle);
+        ctx.fillStyle = particle.color;
+        ctx.fillRect(0 - particle.size.w/2, 0 - particle.size.h/2, particle.size.w, particle.size.h);
+        ctx.restore();
+    },
+    deleteParticles: function(particle, index) {
+        if (particle.shouldDisappear()) {
+            this.particlesList.splice(index, 1);
+        }
+    },
+    createParticleExplosion: function(position, quantity) {
+        for (let i = 0; i <= quantity; i++) {
+            const positionOffset = getRandomInt(2, 7);
+            const newPosition = {x: position.x + positionOffset, y: position.y + positionOffset};
+            const angleAndVelocity = this.genVelocityAndAngle();
+
+            const newParticle = new Particle(this.genSize(),newPosition, angleAndVelocity.velocity, 
+            getRandomInt(1, 3), angleAndVelocity.angle, this.particlesColors[getRandomInt(0, 2)]);
+
+            this.particlesList.push(newParticle);
+        }
+    },
+    genVelocityAndAngle: function() {
+        const generatedAngleDegrees = getRandomInt(1, 359);
+        const angleRadians = convertToRadians(generatedAngleDegrees);
+        const unitVector = {x: Math.cos(angleRadians), y: Math.sin(angleRadians)};
+        return {velocity: unitVector, angle: angleRadians};
+    },
+    genSize: function() {
+        const size = getRandomInt(5, 11);
+        return {w: size, h: size};
+    }
+}
 
 let player = {
     image: idleImage,
@@ -291,9 +364,9 @@ let player = {
     friction: 0.005,
     bullets: [],
     cooldown: 0,
-    lifePoints: 100,
+    lifePoints: 1,
     score: 0,
-    accelerating: false,
+    status: "idle",
     setFacingDirectionAndAcceleration: function(){
         this.facingDirection = {x: Math.cos(this.rotatedAngle), y: Math.sin(this.rotatedAngle)};
         this.acceleration = {x: this.facingDirection.x * this.speed, y: this.facingDirection.y * this.speed};
@@ -391,11 +464,17 @@ let player = {
         }
     },
     appear: function() {
-        this.handleInput();
-        this.move();
-        this.applyFriction();
-        this.updateCoolDown();
-        this.drawItself();
+        if (this.lifePoints > 0) {
+            this.handleInput();
+            this.move();
+            this.applyFriction();
+            this.updateCoolDown();
+            this.drawItself();
+        }
+        if (this.lifePoints <= 0 && this.status != "exploded") {
+            this.explode();
+            this.status = "exploded";
+        } 
     },
     drawBullets: function() {
         for (item of this.bullets) {
@@ -407,6 +486,9 @@ let player = {
             ctx.restore();
             
         }
+    },
+    explode: function() {
+        particleEffects.createParticleExplosion(this.position, 27);
     }
 }
 
@@ -451,13 +533,14 @@ function gameLoop() {
     }
     drawPlayerLife(player);
     drawPlayerScore(player);
+    particleEffects.updateParticles();
     keepWithinScreen(player);
 }
 
 window.addEventListener("keydown", function (event) {
     let keyBeingPressed = event.key;
-    if (keyBeingPressed == "w") {
-        player.accelerating = true;
+    if (keyBeingPressed == "w" && player.status == "idle") {
+        player.status = "accelerating";
     }
     if (!player.keysBeingPressed.includes(keyBeingPressed)) {
         player.keysBeingPressed.push(keyBeingPressed)
@@ -465,8 +548,8 @@ window.addEventListener("keydown", function (event) {
 });
 window.addEventListener("keyup", function(event){
     let keyBeingReleased = event.key;
-    if (keyBeingReleased == "w") {
-        player.accelerating = false;
+    if (keyBeingReleased == "w" && player.status == "accelerating") {
+        player.status = "idle";
     }
     player.keysBeingPressed = player.keysBeingPressed.filter((item)=>item != keyBeingReleased);
 })
