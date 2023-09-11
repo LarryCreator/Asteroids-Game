@@ -1,5 +1,3 @@
-//atualmente com bug de qdo o player morre e explode, asteroids ainda explodem qdo batem na posição q o player tava antes de ir de berço
-//crie um sistema de status melhor, e depois isso crie texto para avisar q o player explodiu, e opção pra jogar novamente
 const canvas = document.getElementById("canvas");
 canvas.width = 800;
 canvas.height = 800;
@@ -74,6 +72,26 @@ function drawPlayerScore(player) {
     ctx.fillStyle = "black";
     ctx.fillText(`Score: ${player.score.toFixed(0)}`, 20, 60);
 }
+function drawHighestScore(player) {
+    if (player.highestScore > 0) {
+        ctx.font = "bold 20px serif";
+        ctx.fillStyle = "black";
+        ctx.fillText(`Highest: ${player.highestScore.toFixed(0)}`, 20, 90);
+    }
+}
+
+function drawDeathScreen() {
+    ctx.font = "bold 50px serif";
+    ctx.strokeStyle = "black";
+    ctx.fillStyle = "darkred";
+    ctx.strokeText(`Final Score: ${player.score.toFixed(0)}`, canvas.width/2 - 165, canvas.height/2);
+    ctx.fillText(`Final Score: ${player.score.toFixed(0)}`, canvas.width/2 - 165, canvas.height/2);
+    ctx.font = "bold 20px serif";
+    ctx.fillStyle = "green";
+    ctx.strokeStyle = "green";
+    ctx.fillText("Press space to play again...", canvas.width/2 - 110, canvas.height/2 + 30);
+    ctx.strokeText("Press space to play again...", canvas.width/2 - 110, canvas.height/2 + 30);
+}
 
 function Asteroid(size, position, speed) {
     this.size = size;
@@ -139,6 +157,9 @@ function Asteroid(size, position, speed) {
 
 let asteroidGenerator = {
     asteroidList: [],
+    reset: function() {
+        this.asteroidList = [];
+    },
     genSize: function(){
         let randomNumber = getRandomInt(20, 60);
         return {w: randomNumber, h: randomNumber};
@@ -192,7 +213,7 @@ let asteroidGenerator = {
     handleAsteroidCollisions: function(bulletsList, playerPosition){
         // Check for collisions between asteroids and the player.
         for (let i = this.asteroidList.length - 1; i >= 0; i--) {
-            if (this.asteroidList[i].isCollided(playerPosition)) {
+            if (this.asteroidList[i].isCollided(playerPosition) && player.status != "exploded") {
                 // Remove the asteroid and break out of the loop.
                 this.asteroidList[i].applyForce(player);
                 this.asteroidList[i].inflictDamage(player);
@@ -306,6 +327,9 @@ function Particle(size, position, velocity, speed, angle, color) {
 let particleEffects = {
     particlesList: [],
     particlesColors: ["darkorange", "red", "yellow"],
+    reset: function() {
+        this.particlesList = [];
+    },
     updateParticles: function() {
         if (this.particlesList.length > 0) {
             for (let i = this.particlesList.length - 1; i >= 0; i--) {
@@ -366,6 +390,7 @@ let player = {
     cooldown: 0,
     lifePoints: 100,
     score: 0,
+    highestScore: 0,
     status: "idle",
     setFacingDirectionAndAcceleration: function(){
         this.facingDirection = {x: Math.cos(this.rotatedAngle), y: Math.sin(this.rotatedAngle)};
@@ -489,6 +514,16 @@ let player = {
     },
     explode: function() {
         particleEffects.createParticleExplosion(this.position, 27);
+    },
+    reset: function() {
+        this.position = {x: 400 - 25 / 2, y:400 - 25/2};
+        this.status = "idle";
+        this.lifePoints = 100;
+        this.velocity = {x: 0, y: 0};
+        if (this.score > this.highestScore) {
+            this.highestScore = this.score;
+        };
+        this.score = 0;
     }
 }
 
@@ -516,13 +551,16 @@ asteroidGenerator.generate(3);
 function gameLoop() {
     requestAnimationFrame(gameLoop);
     clear();
+    if (player.status == "exploded") {
+        drawDeathScreen();
+    };
+    checkGenerateAsteroids();
     player.appear();
     animator.thrustingAnimation(player);
     if (asteroidGenerator.asteroidList.length > 0) {
         updateAsteroids();
         asteroidGenerator.handleAsteroidCollisions(player.bullets, player.position);
     } 
-    checkGenerateAsteroids();
     if (player.bullets.length > 0) {
         player.shoot();
         for (let i = player.bullets.length - 1; i >= 0; i--) {
@@ -533,14 +571,21 @@ function gameLoop() {
     }
     drawPlayerLife(player);
     drawPlayerScore(player);
+    drawHighestScore(player);
     particleEffects.updateParticles();
     keepWithinScreen(player);
+    
 }
 
 window.addEventListener("keydown", function (event) {
     let keyBeingPressed = event.key;
     if (keyBeingPressed == "w" && player.status == "idle") {
         player.status = "accelerating";
+    }
+    if (keyBeingPressed == " " && player.status == "exploded") {
+        player.reset();
+        asteroidGenerator.reset();
+        particleEffects.reset();
     }
     if (!player.keysBeingPressed.includes(keyBeingPressed)) {
         player.keysBeingPressed.push(keyBeingPressed)
